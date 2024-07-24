@@ -1,0 +1,4 @@
+Title of work: Serenity BDD Framework
+Link to work: https://en.wikipedia.org/wiki/Behavior-driven_development
+License of the work: CC-BY-SA-4.0
+Creator names: Wikipedia Authors

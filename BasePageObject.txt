@@ -1,0 +1,1644 @@
+package gov.scot.utilities.common;
+
+import com.github.javafaker.Faker;
+import com.squareup.okhttp.OkHttpClient;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
+import gov.scot.utilities.common.utilityHelpers.AssertionHelper;
+import gov.scot.utilities.common.utilityHelpers.DataHelper;
+import gov.scot.utilities.common.utilityHelpers.LogbackUtils;
+import net.serenitybdd.core.Serenity;
+import net.serenitybdd.core.pages.PageObject;
+import net.serenitybdd.core.pages.WebElementFacade;
+import net.serenitybdd.model.environment.ConfiguredEnvironment;
+import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.json.JSONException;
+import org.junit.Assert;
+import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.*;
+import org.openqa.selenium.interactions.Actions;
+import org.openqa.selenium.support.ui.ExpectedCondition;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.Select;
+import org.openqa.selenium.support.ui.WebDriverWait;
+import org.yaml.snakeyaml.Yaml;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.text.DateFormat;
+import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
+
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.junit.Assert.fail;
+
+
+public class BasePageObject extends PageObject {
+    static final Logger staticLogger = LoggerFactory.getLogger(BasePageObject.class);
+    public static Map<String, String> TestDataReference = new HashMap<>();
+    public static List<String> TestDataValues = new ArrayList<>();
+    public static String RandomRegisteredUserName;
+    public SharedData sharedData;
+    protected Logger logger = LoggerFactory.getLogger(getClass());
+    String envLogLevel = ConfiguredEnvironment.getEnvironmentVariables().getProperty("logging.logginglevel");
+
+    public BasePageObject() {
+        LogbackUtils.setLogLevel("", envLogLevel);
+        sharedData = getSharedData();
+    }
+    Yaml yaml = new Yaml();
+
+    /**
+     * gets the customised date, if you want the date in past pass the "-ve" value
+     *
+     * @param daysToAdd   – the days to add, may be negative
+     * @param monthsToAdd – the months to add, may be negative
+     * @param yearsToAdd  – the years to add, may be negative
+     * @return returns date in dd/MM/YY format
+     */
+    public static String getDate(long daysToAdd, long monthsToAdd, long yearsToAdd) {
+        DateTimeFormatter genericFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        return LocalDate.now().plusDays(daysToAdd).plusMonths(monthsToAdd).plusYears(yearsToAdd).format(genericFormatter);
+    }
+
+    public static String getRandomDBNumber() {
+        int randomNineDigits = ThreadLocalRandom.current().nextInt(100000000, 900000000);
+        return String.valueOf(randomNineDigits);
+    }
+
+    // for example convert 1000 to 1,000.00 to this pass value2 as ("#,###.00")
+    public static String returnGivenFormat(String value1, String value2) {
+        DecimalFormat df2 = new DecimalFormat(value2);
+        return df2.format(Double.parseDouble(value1.replaceAll(",", "")));
+    }
+
+    public static String sumOfStringValues(String[] container) {
+        DecimalFormat decimalFormatOfSum = new DecimalFormat("#,##0.00");
+        Double sum = 0.00;
+
+        for (String element : container) {
+            try {
+                double num = Double.parseDouble(element.replaceAll(",", ""));
+                sum += num;
+            } catch (NumberFormatException e) {
+                staticLogger.warn(String.format("Element %s in the array is not an integer", element));
+            }
+        }
+
+        return decimalFormatOfSum.format(sum);
+    }
+
+    public static String diffOfStringValues(String value1, String value2) {
+        DecimalFormat decimalFormatOfSubtract = new DecimalFormat("#,##0.00");
+        Double diff;
+
+        Double num1 = Double.parseDouble(value1.replaceAll(",", ""));
+        Double num2 = Double.parseDouble(value2.replaceAll(",", ""));
+        diff = num1 - num2;
+
+        return decimalFormatOfSubtract.format(diff);
+    }
+
+    public static String currentDateTime() {
+        DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+        Calendar cal = Calendar.getInstance();
+        return dateFormat.format(cal.getTime());
+    }
+
+    public static String RandomDate(String daterange) {
+        DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+        //SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+        Calendar currentDateBefore = Calendar.getInstance();
+        currentDateBefore.add(Calendar.YEAR, -Integer.parseInt(daterange));
+        return dateFormat.format(currentDateBefore.getTime());
+    }
+
+    public static String RandomDateInbetween(String datefrom, String dateto) throws Exception {
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
+        //SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        Date fromdate = sdf.parse(datefrom);
+        Date Todate = sdf.parse(dateto);
+        Faker faker = new Faker();
+        Date dateofBirthBaby = faker.date().between(fromdate, Todate);
+        return sdf.format(dateofBirthBaby);
+    }
+
+    public static String getRandomNino() {
+        int randomSixDigits = ThreadLocalRandom.current().nextInt(100000, 900000);
+        //AT & D stand for Automation Test Data :)
+        return RandomStringUtils.random(1, "ABCEGHJS") + "T" + randomSixDigits + "D";
+    }
+
+    public static String getRandomPhoneNumber() {
+        int randomNineDigits = ThreadLocalRandom.current().nextInt(100000000, 900000000);
+        int randomTwoDigits = ThreadLocalRandom.current().nextInt(10, 99);
+        String a = Integer.toString(randomNineDigits);
+        String b = Integer.toString(randomTwoDigits);
+        return a + b;
+    }
+
+    public static String getRandomPostCode() {
+        String[] postcodes = {"EH3 7AA", "EH30 9PT", "EH13 0LS", "EH5 1JF", "EH9 1UL", "EH11 3ES", "EH9 3AQ", "EH3 7LJ", "EH10 5HX",
+                "EH7 6HW", "G13 3AE", "G40 2DL", "G42 8UF", "G33 2JZ", "G11 7LP", "G33 2LL", "G33 3BY",
+                "G32 9BE", "AB16 7GN", "AB12 3JQ", "AB22 8FG", "AB25 2BU", "AB12 3JS", "AB11 6JZ", "AB24 5EH",
+                "EH26 0AA", "EH26 0AB", "EH13 0LS", "EH26 0AD", "EH26 0AE", "EH26 0AF", "EH26 0AG", "EH26 0AH",
+                "G20 0AA", "G20 0AB", "G20 0AD", "G20 0AE", "G22 5AA", "G22 5AB", "G22 5AD", "G22 5AG",
+                "AB22 8AA", "AB22 8AB", "AB22 8AE", "AB22 8AF", "AB22 8AG", "AB22 8AH", "AB22 8AJ", "AB22 8AL",
+                "AB16 5AF", "AB16 5AG", "AB16 5BB", "AB16 5BD", "AB16 5BL", "AB16 5BN", "AB16 5BP",
+                "EH22 1AA", "EH22 1AB", "EH22 1AD", "EH22 1AE", "EH12 0AA", "EH12 0AD", "EH12 0AG",
+                "G12 0AA", "G12 0AB", "G12 0AD", "G12 0AE", "G12 0AG", "G12 0AH",};
+
+        String randomPostcode = postcodes[new Random().nextInt(postcodes.length)];
+        staticLogger.info("Random Postcode selected - " + randomPostcode);
+        return randomPostcode;
+    }
+
+    public String generatePortalId() {
+        StringBuilder portalId = new StringBuilder();
+
+        String characters = "0123456789abcdefghijklmnopqrstuvwxyz";
+        Random random = new Random();
+
+        for (int i = 0; i < 36; i++) {
+            if (i == 8 || i == 13 || i == 18 || i == 23) {
+                portalId.append('-');
+            } else {
+                int index = random.nextInt(characters.length());
+                portalId.append(characters.charAt(index));
+            }
+        }
+        return String.valueOf(portalId);
+    }
+
+    public static String checkIfRandomReturnRandomPostcode(String value) {
+        if (DataHelper.checkForRandom(value)) {
+            return getRandomPostCode();
+        } else return value;
+    }
+
+    public static void selectDropdownByValue(WebElement dropDownElement, String value) {
+        new Select(dropDownElement).selectByValue(value);
+    }
+
+    /**
+     * Below method is used by CASE TRANSFER team, it generates a random Bank Account number
+     */
+    public static String getRandomAccNumber() {
+        int randomEightDigits = ThreadLocalRandom.current().nextInt(20000001, 89999999);
+        return String.valueOf(randomEightDigits);
+    }
+
+    public static String getRandomMATB1() {
+        int randomNineDigits = ThreadLocalRandom.current().nextInt(100000000, 900000000);
+        return String.valueOf(randomNineDigits);
+    }
+
+    public SharedData getSharedData() {
+        sharedData = Serenity.sessionVariableCalled("SharedData");
+        if (sharedData == null) {
+            sharedData = new SharedData();
+            Serenity.setSessionVariable("SharedData").to(sharedData);
+        }
+        return sharedData;
+    }
+
+
+
+  //Login with different users
+  //I am on the Home page of the IBM SPM
+  // Related to method - i_am_on_the_home_page_of_the_ibm_spm
+    public void switchToDefaultFrame() {
+        logger.info("Switching to default frame");
+        waitForCondition(() -> {
+            getDriver().switchTo().defaultContent();
+            return true;
+        }, "Failed to switch to the default content in the given time of 30 secs");
+        waitForPageLoading();
+    }
+
+    /**
+     * Below method performs switching to parent frame in the browser
+     */
+    //From Seleniun methods
+    public void switchToParentFrame() {
+        logger.info("Switching to parent frame");
+        waitForCondition(() -> {
+            getDriver().switchTo().parentFrame();
+            return true;
+        }, "Failed to switch to the parent content in the given time of 30 secs");
+        waitForPageLoading();
+    }
+
+    /**
+     * Below method finds an element by xPath and waits until the element is present in the DOM
+     */
+    //From Seleniun methods
+    // This method has been changed to use the below method that is similiar
+    public void waitUntilTheElementIsPresent(String xpath) {
+        waitUntilTheElementIsPresent(By.xpath(xpath));
+    }
+
+    /**
+     * Below method is more-generic and it accepts an object of Type "By" (From Webdriver) as parameter, finds an element and determine its presence
+     */
+    public void waitUntilTheElementIsPresent(By by) {
+        logger.info(String.format("Waiting for element to be present at - %s", by.toString()));
+        waitForCondition(ExpectedConditions.presenceOfElementLocated(by));
+    }
+
+    /**
+     * Below method is similar to the above one. It accepts a xpath as parameter, finds that element and determine its visibility
+     */
+    //From Seleniun methods
+    public void waitUntilTheElementIsVisible(String xpath) {
+        waitForCondition(ExpectedConditions.visibilityOfElementLocated(By.xpath(xpath)));
+    }
+
+    /**
+     * Below method is similar to the above one. It accepts a xpath as parameter, finds that element and determine its visibility
+     */
+    //From Seleniun methods
+    public void waitUntilTheElementIsVisible(By by) {
+        waitForCondition(ExpectedConditions.visibilityOfElementLocated(by));
+    }
+
+    /**
+     * Below method is similar to the above one. It accepts a WebElement as parameter, finds that element and determine its visibility
+     */
+    //From Seleniun methods
+    public void waitUntilTheElementIsVisible(WebElement element) {
+        waitForCondition(ExpectedConditions.visibilityOfAllElements(element));
+    }
+
+    /**
+     * Below method performs explicit wait for an element by Text value
+     */
+    public void waitUntilTextIsPresent(String text) {
+        logger.info(String.format("Waiting for text to be present - %s", text));
+        String xpath = String.format("(//*[contains(text(),'%s')])[1]", text);
+        waitForCondition(ExpectedConditions.textToBePresentInElementLocated(By.xpath(xpath), text));
+    }
+
+    /**
+     * This method waits for the WebPage to get fully loaded
+     */
+    public void waitForPageLoaded() {
+        waitForPageLoading();
+    }
+
+    /**
+     * Below method verifies if a text present or not by its xpath
+     */
+    public boolean verifyTextPresentByXpath(By element, String text) {
+        logger.info(String.format("Verifying %s element has %s text", element, text));
+        return getText(element).contains(text);
+    }
+
+    /**
+     * Below method verifies if a text present or not by its xpath
+     */
+    public boolean verifyTextPresentByXpath(WebElement element, String text) {
+        logger.info(String.format("Verifying %s element has %s text", element, text));
+        return getText(element).contains(text);
+    }
+
+    /**
+     * The below method searches and returns a boolean value based on whether a Text is present or not
+     */
+    public boolean isTextPresent(String str) {
+        waitForPageLoading();
+        logger.info(String.format("Checking text is present, expected text:%s", str));
+        AtomicBoolean isTextDisplayed = new AtomicBoolean(false);
+        waitForCondition(() -> {
+            isTextDisplayed.set(getDriver().getPageSource().contains(str));
+            return true;
+        }, "failed to verify the text on DOM");
+        return isTextDisplayed.get();
+    }
+
+    /**
+     * The below method searches and returns a boolean value based on whether an element is present or not by a given String/text value
+     */
+    public boolean isElementPresent(String str) {
+        return containsElements(By.xpath(str));
+    }
+
+    /**
+     * Below method finds and returns an asynchronous WebElement by its xpath
+     */
+
+    public WebElement getFluentElement(final String xpath) {
+        return getElementByXpath(xpath);
+    }
+
+    /**
+     * Below method finds and returns an element by its xpath
+     */
+    public WebElement getElementByXpath(String xpath) {
+        logger.info("Get element using xpath:" + xpath);
+        return getElement(By.xpath(xpath));
+    }
+
+    public void waitUntilTheElementIsClickable(String xpath) {
+        logger.info("Wait for element to be clickable xpath: " + xpath);
+        waitForCondition(ExpectedConditions.elementToBeClickable(By.xpath(xpath)));
+    }
+
+    public void waitUntilTheElementIsClickable(By elementBy) {
+        logger.info("Waiting for element to be clickable xpath" + elementBy);
+        waitForCondition(ExpectedConditions.elementToBeClickable(elementBy));
+    }
+
+    public void waitUntilTheElementIsClickable(WebElement element) {
+        logger.info("Wait for element to be clickable element: " + element);
+        waitForCondition(ExpectedConditions.elementToBeClickable(element));
+    }
+
+    public void verifyElementExists(final WebElement el) {
+        try {
+            await().atMost(10, SECONDS).ignoreExceptions().until(() -> el.isDisplayed() || el.isEnabled());
+        } catch (Exception e) {
+            Assert.fail("WebElement " + el.toString() + " was not found on page");
+        }
+    }
+
+    public void verifyElementExists(By el) {
+        try {
+            await().atMost(10, SECONDS).ignoreExceptions().until(() -> getElement(el).isDisplayed() || getElement(el).isEnabled());
+        } catch (Exception e) {
+            fail("WebElement " + el.toString() + " was not found on page");
+        }
+    }
+
+
+
+
+    public void selectDropdownValue(WebElement el, String value) {
+        verifyElementExists(el);
+        Select dropDown = new Select(el);
+        dropDown.selectByVisibleText(value);
+    }
+
+    /**
+     * waits until the frame is available and switches to it.
+     * ƒø
+     *
+     * @param element frame element to switch
+     */
+    public void switchToFrame(WebElement element) {
+        waitForPageLoading();
+        logger.info("switch to frame:" + element.toString());
+        waitForCondition(ExpectedConditions.frameToBeAvailableAndSwitchToIt(element));
+        waitForPageLoading();
+    }
+
+    public void switchToFrame(By elementBy) {
+        waitForPageLoading();
+        logger.debug("switch to frame:" + elementBy.toString());
+        waitForCondition(ExpectedConditions.frameToBeAvailableAndSwitchToIt(elementBy));
+        logger.debug("Successfully switching to frame:" + elementBy);
+        waitForPageLoading();
+    }
+
+    public String getText(WebElement element) {
+        logger.debug("Get the text of the element using:" + element);
+        scrollElementIntoView(element);
+        waitForCondition(ExpectedConditions.visibilityOf(element));
+        String[] elementText = new String[1];
+        waitForCondition(() -> {
+            try {
+                elementText[0] = element.getText();
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+
+        }, "failed to get the text from the element");
+        logger.debug("Returned the text:" + elementText[0] + " for the element:" + element);
+        return elementText[0];
+
+    }
+
+    public String getText(By by) {
+        logger.debug("Get the text of the element using:" + by);
+        scrollElementIntoView(by);
+        waitForCondition(ExpectedConditions.visibilityOfElementLocated(by));
+        String[] elementText = new String[1];
+        waitForCondition(() -> {
+            try {
+                elementText[0] = findElement(by).getText();
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }, "unable to retrieve the text from the element");
+        return elementText[0];
+
+    }
+
+    /**
+     * gets the text of the element using jquery
+     *
+     * @param querySelector jquery to find the element
+     * @return text of the matching element
+     */
+    public String getTextUsingJquery(String querySelector) {
+        logger.debug("Get text of the element using the jquery selector:" + querySelector);
+        waitForPageLoading();
+        String query = String.format("$('%1$s')", querySelector.replace("'", "\\'"));
+        String isElementDisplayed = String.format("return %1$s.length>0;", query);
+        waitForCondition(() -> (boolean) evaluateJavascript(isElementDisplayed), "Failed to find the element using jquery: " + query);
+        String queryWithScroll = query + "[0].scrollIntoView();" + "return " + query + ".first().text();";
+        logger.debug("Get text of element using jquery:" + queryWithScroll);
+        return (String) evaluateJavascript(queryWithScroll);
+    }
+
+    public void switchToFrameThenClick(By frameToSwitchFromDefault, By elementToClick) {
+        logger.info("switching to new frame from the default frame, Frame:" + frameToSwitchFromDefault + "and click:" + elementToClick);
+        switchToFrameFromDefault(frameToSwitchFromDefault);
+        click(elementToClick);
+    }
+
+    public void switchToFrameFromDefault(WebElement frameToSwitchFromDefault) {
+        logger.info("switching to new frame from the default frame, Frame:" + frameToSwitchFromDefault);
+        switchToDefaultFrame();
+        switchToFrame(frameToSwitchFromDefault);
+    }
+
+    public void switchToFrameFromDefault(By frameToSwitchFromDefault) {
+        logger.info("switching to new frame from the default frame, Frame:" + frameToSwitchFromDefault);
+        switchToDefaultFrame();
+        waitForCondition(ExpectedConditions.visibilityOfElementLocated(frameToSwitchFromDefault));
+        switchToFrame(frameToSwitchFromDefault);
+    }
+
+    /**
+     * waits for frame to be available and switch to it
+     *
+     * @param xpath frame x-path
+     */
+    public void switchToFrame(String xpath) {
+        switchToFrame(By.xpath(xpath));
+    }
+
+    public void selectVisibileTextByXPath(String xpath, String value) {
+        try {
+            new Select(getElement(By.xpath(xpath))).selectByVisibleText(value);
+            logger.info("The element with xpath:" + xpath + " is selected with value :" + value);
+        } catch (Exception e) {
+            Assert.fail("The value: " + value + " could not be selected");
+        }
+    }
+
+    //    Added By Manali
+    public void selectVisibileTextByElement(WebElement element, String value) {
+        try {
+            Select dropDown = new Select(element);
+            dropDown.selectByVisibleText(value);
+
+            System.out.println("The element is selected with value :" + value);
+        } catch (Exception e) {
+            fail("The value: " + value + " could not be selected");
+        }
+    }
+
+    public void verifyPageHeader(String textVal) throws Throwable {
+        waitForPageLoading();
+        shouldContainsToIgnoringCase("page header not matched",By.tagName("h1"),textVal);
+    }
+
+    public void selectVisibileTextByElement(WebElement element, int index) throws Exception {
+        try {
+            Select dropDown = new Select(element);
+            dropDown.selectByIndex(index);
+
+            System.out.println("The element is selected with index :" + index);
+        } catch (Exception e) {
+            throw new Exception("The index: " + index + " could not be selected");
+        }
+    }
+
+    public void selectByDropdown(By by, String dropdownEntry) {
+        Select dropDownElement = new Select(findElement(by));
+        dropDownElement.selectByVisibleText(dropdownEntry);
+    }
+
+    public void selectVisibileTextByIndex(String xpath, int index) throws Exception {
+        try {
+            new Select(getDriver().findElement(By.xpath(xpath))).selectByIndex(index);
+            System.out.println("The element with xpath: " + xpath + " is selected with value :" + index);
+        } catch (Exception e) {
+            throw new Exception("The value: " + index + " could not be selected");
+        }
+    }
+
+    public WebElement getWebElementLinkbyText(String lnkText) {
+        logger.info("Getting element by linktext " + lnkText);
+        try {
+            return getElement(By.linkText(lnkText));
+        } catch (Exception e) {
+            return getElement(By.partialLinkText(lnkText));
+        }
+    }
+
+    public String currentDate() {
+        DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+        Calendar cal = Calendar.getInstance();
+        String cal1 = dateFormat.format(cal.getTime());
+        logger.info(String.format("Getting current date  as%s", cal1));
+        return cal1;
+    }
+
+    public String ReturnDate(int months, int weeks, int days) {
+        int noOfDays = weeks * 7;
+        noOfDays = noOfDays + days;
+        DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+        Calendar currentDate = Calendar.getInstance();
+        currentDate.add(Calendar.MONTH, months);
+        currentDate.add(Calendar.DAY_OF_YEAR, noOfDays);
+        return dateFormat.format(currentDate.getTime());
+    }
+
+    /**
+     * This JavaScript injection is used to scroll an element into view
+     */
+    public void scrollElementIntoView(WebElement objElem) {
+        waitForPageLoading();
+        logger.debug("Scroll into element view:" + objElem);
+        waitForConditionWithoutException(() -> {
+            evaluateJavascript("arguments[0].scrollIntoView();", objElem);
+            return true;
+        }, 5, "");
+
+    }
+
+    /**
+     * This JavaScript injection is used to scroll an element into view
+     */
+    public void scrollElementIntoView(By by) {
+        logger.debug("Scroll into element view:" + by);
+        waitForPageLoading();
+        for (int i = 0; i < 3; i++) {
+            try {
+                evaluateJavascript("arguments[0].scrollIntoView();", getElement(by));
+                break;
+            } catch (Exception e) {
+                logger.warn("unable to scroll into the element view, retry in progress. Element:" + by);
+            }
+        }
+    }
+
+    /**
+     * Scrolls to specified element using JavaScript
+     *
+     * @param cssSelector Css selector
+     */
+    public void scrollElementIntoView(String cssSelector) {
+        logger.debug("Scroll into element view:" + cssSelector);
+        waitForPageLoading();
+        waitForConditionWithoutException(() -> {
+            evaluateJavascript(String.format("document.querySelector(\"%s\").scrollIntoView();", cssSelector));
+            return true;
+        }, 10, "unable to scroll into the element view,element:" + cssSelector);
+
+    }
+
+    /**
+     * Explicit wait based on JS executor call
+     */
+    @Deprecated
+    public void waitForPageToBeLoaded() {
+        waitForPageLoading();
+    }
+
+    /**
+     * Enters key input in text box
+     */
+
+    public void click(WebElement element, String sElementName, int time) {
+        if (getDriver().toString().contains("appium")) {
+            try {
+                waitForElementToLoad(element, sElementName, time);
+                element.click();
+            } catch (StaleElementReferenceException e) {
+                fail("Element " + sElementName
+                        + " is not attached to the page document");
+            } catch (NoSuchElementException e) {
+
+                fail("Element " + sElementName + " was not found in DOM");
+            } catch (Exception e) {
+
+                fail("Some Exception occured while clicking on "
+                        + sElementName);
+            }
+        } else {
+            try {
+                waitForElementToLoad(element, sElementName, time);
+                scrollElementIntoView(element);
+                element.click();
+            } catch (StaleElementReferenceException e) {
+                e.printStackTrace();
+                fail("Element " + sElementName
+                        + " is not attached to the page document");
+            } catch (NoSuchElementException e) {
+                e.printStackTrace();
+                fail("Element " + sElementName + " was not found in DOM");
+            } catch (ElementClickInterceptedException e) {
+                click(element);
+                e.printStackTrace();
+            } catch (Exception e) {
+                e.printStackTrace();
+                fail("Some Exception occured while clicking on "
+                        + sElementName);
+            }
+        }
+
+        waitForPageToBeLoaded();
+    }
+
+
+    /**
+     * Web driver waits for visibility of specified web element for the amount
+     * of time specified.
+     *
+     * @return true or false
+     */
+    @Deprecated
+    public boolean waitForElementToLoad(WebElement element, String sElementName, int waitTime) {
+        try {
+            WebDriverWait wait = new WebDriverWait(getDriver(), Duration.ofSeconds(waitTime));
+            logger.info("Waiting for " + sElementName);
+            wait.until(ExpectedConditions.visibilityOf(element));
+        } catch (TimeoutException e) {
+            fail("Element " + sElementName
+                    + " was not visible in time - " + waitTime);
+            return false;
+        } catch (NoSuchElementException e) {
+            fail("Element " + element
+                    + "is not attached to the page document");
+            return false;
+        } catch (Exception e) {
+            fail("Unable to find the element " + sElementName);
+            logger.info(e.getMessage());
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * use this method in case if you find any issues with the click() method
+     *
+     * @param enterOnElement press enter key on the element
+     */
+    public void pressEnterOnElement(By enterOnElement) {
+        scrollElementIntoView(enterOnElement);
+        waitForCondition(() -> {
+            findElement(enterOnElement).sendKeys(Keys.ENTER);
+            return true;
+        }, "Failed to press the enter button on the element:" + enterOnElement);
+    }
+
+    public void maximizeWindow() {
+        getDriver().manage().window().maximize();
+    }
+
+    public void switchWindowByName(String name) {
+        waitForPageLoading();
+        String currentWindow = getDriver().getWindowHandle();
+        Set<String> handles = getDriver().getWindowHandles();
+        for (String handle : handles) {
+            if (getDriver().switchTo().window(handle).getTitle().equals(name))
+                break;
+            else
+                getDriver().switchTo().window(currentWindow);
+        }
+    }
+
+    public LocalDate getRelativeDate(String dateOffset) {
+        LocalDate relativeDate = LocalDate.now().plusDays(Integer.parseInt(dateOffset));
+        logger.info("Relative date:" + relativeDate);
+        return relativeDate;
+    }
+
+    private void navigateToUrl(String pageName) {
+        String url = EnvironmentVariables.getEnvironmentVariable(pageName);
+        logger.info("Navigating to URL - " + url);
+        waitForConditionWithoutException(() -> {
+            maximizeWindow();
+            getDriver().manage().deleteAllCookies();
+            getDriver().navigate().to(url);
+            return true;
+        }, 80, "Unable to login into the application URL: " + url);
+    }
+
+
+    public void refreshPage() {
+        getDriver().navigate().refresh();
+    }
+
+  //Given I login to spm as <users>
+   //Login with different users
+   //Related to 'i_login_to_spm' method	
+    public void navigateToSPMUrl() {
+        navigateToUrl(EnvironmentVariables.SPM_PAGE);
+    }
+
+    public void postCallToJenkinsBuild() throws IOException {
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder()
+                .url("http://orchestrator.scotgov-dt.local:8080/job/run-batch-ssdbpp-test21/buildWithParameters?token=JsFKLmZq267dmD23gkfvyTQByzxfZhgd")
+                .addHeader("Authorization", "Basic dGVzdGVyMDE6MTFiN2IzMWU5MTQ3MDlkNGI0MDYyZTZhNTI3YTUwYmMyYw==")
+                .addHeader("Host", "orchestrator.scotgov-dt.local:8080")
+                .build();
+
+        Response response = client.newCall(request).execute();
+
+        if (response.code() != 201) {
+            Assert.fail("Jenkins Build trigger failed");
+        }
+
+    }
+
+    public void navigateToAEMUrl() {
+        navigateToUrl(EnvironmentVariables.AEM_PAGE);
+    }
+
+    public void navigateToAEMThank(String thankYouPath) {
+
+        String AEM_base = EnvironmentVariables.getEnvironmentVariable("aem.thankyou");
+        String url = AEM_base + thankYouPath;
+        maximizeWindow();
+        getDriver().get(url);
+    }
+
+    public void navigateToDocUploadUrl() {
+        navigateToUrl(EnvironmentVariables.DOC_PAGE);
+    }
+
+    public boolean verifyTextPresentInElements(String xpath, String text) throws Exception {
+        try {
+            List<WebElement> AllElemnts = getDriver().findElements(By.xpath(xpath));
+            for (WebElement element : AllElemnts) {
+                if (getText(element).equalsIgnoreCase(text)) {
+                    logger.info(String.format("Verifying %s text is at %s - text found", text, xpath));
+                    return true;
+                }
+            }
+            logger.info(String.format("Verifying %s text is at %s - text not found", text, xpath));
+            return false;
+        } catch (Exception e) {
+            throw new Exception("Unknown exception occured while verifying the title FAIL");
+        }
+    }
+
+    public String ReturnDateMinus(int months, int weeks, int days) {
+        int noOfDays = weeks * 7;
+        System.out.println("  NO OF Days : " + noOfDays);
+        noOfDays = noOfDays + days;
+        DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+        Calendar currentDate = Calendar.getInstance();
+        currentDate.add(Calendar.MONTH, -months);
+        currentDate.add(Calendar.DAY_OF_YEAR, noOfDays);
+        String datevalue = dateFormat.format(currentDate.getTime());
+        System.out.println(datevalue);
+        logger.info(String.format("Getting date minus %s months %s weeks %s days - %s",
+                months, weeks, days, datevalue));
+        return datevalue;
+    }
+
+    public void launchdlaapp() {
+        navigateToUrl(EnvironmentVariables.CDP_PAGE);
+    }
+
+    /*CDP SRTI */
+    public void launchdlasrtapp() {
+        navigateToUrl(EnvironmentVariables.CDP_SRTI_PAGE);
+    }
+
+    /**
+     * Launch PIP application url
+     */
+    public void launchpip() {
+        navigateToUrl(EnvironmentVariables.PIP_PAGE);
+    }
+
+    /* PIP SRTI PAGE*/
+    public void launchpipsrti() {
+        navigateToUrl(EnvironmentVariables.PIP_SRTI_PAGE);
+    }
+
+    /**
+     * Launch Digital Portal application
+     */
+    public void launchDigitalPortal() {
+        navigateToUrl(EnvironmentVariables.DP_PAGE);
+    }
+
+    /**
+     * launch Notification Mfiles portal
+     */
+    public void launchNotificationMfilesPortal() {
+        navigateToUrl(EnvironmentVariables.MFILES_PAGE);
+    }
+
+    /**
+     * Navigates to Insights application
+     */
+    public void navigateToInsightsPage() {
+        navigateToUrl(EnvironmentVariables.INSIGHT_PAGE);
+    }
+
+    /**
+     * Navigates to Appointment Booking Url
+     */
+    public void navigateToAppointmentBookingUrl() {
+        navigateToUrl(EnvironmentVariables.AB_PAGE);
+    }
+
+    public void navigateToManagementToolUrl() {
+        navigateToUrl(EnvironmentVariables.MANAGEMENT_TOOL_PAGE);
+    }
+
+    /**
+     * Switches to a immediate child frame
+     */
+    public void switchToImmediateChildFrame() {
+        logger.info("Switching to parent frame");
+        getDriver().switchTo().frame(0);
+    }
+
+    /**
+     * Navigates to Consultation url
+     */
+    public void navigateToConsultationUrl() {
+        navigateToUrl(EnvironmentVariables.CONSULTATION_PAGE);
+    }
+
+    /**
+     * Navigates to a Mobile consultation Url
+     */
+    public void navigateToMobileConsultationUrl() {
+        navigateToUrl(EnvironmentVariables.CONSULTATION_MOBILE_PAGE);
+    }
+
+    /**
+     * Navigates to a Consultation Client Portal URL
+     */
+    public void navigateToConsultationClientPortalUrl() {
+        navigateToUrl(EnvironmentVariables.CONSULTATION_CLIENT_PORTAL);
+    }
+
+    /**
+     * Navigates to a local Delivery url
+     */
+    public void navigateToLocalDelivery() {
+        navigateToUrl(EnvironmentVariables.LOCAL_DELIVERY);
+    }
+
+    /**
+     * Navigates to DSP URL
+     */
+    public void navigateToDspUrl() {
+        navigateToUrl(EnvironmentVariables.DSP_PAGE);
+    }
+
+    public void navigateToSiDspUrl() {
+        navigateToUrl(EnvironmentVariables.SI_DSP_PAGE);
+    }
+
+    //PPCM
+    public void navigateToPPCMUrl() {
+        navigateToUrl(EnvironmentVariables.PPCM_PAGE);
+    }
+
+    public void navigateToAuditUrl() {
+        navigateToUrl(EnvironmentVariables.AUDIT_PAGE);
+    }
+
+    public void navigateToPPCMRaiseIncidentUrl() {
+        navigateToUrl(EnvironmentVariables.PPCM_INCIDENT_PAGE);
+    }
+
+    /**
+     * click on the element using the jQuery Script
+     *
+     * @param scriptOrCSSSelector Jquery script or pass the css selector/query selector  , basically a css selector inside this => $('css selector')
+     */
+    public void jQueryClick(String scriptOrCSSSelector) {
+        logger.debug("Perform jquery click using cssSelector:" + scriptOrCSSSelector);
+        String formattedQuery = scriptOrCSSSelector.startsWith("$") ? scriptOrCSSSelector : String.format("$('%1$s')", scriptOrCSSSelector);
+        String elementToClick = String.format("$(function(){%1$s[0].scrollIntoView();%1$s[0].click();})", formattedQuery);
+        String isElementDisplayed = String.format("return %1$s.length>0;", formattedQuery);
+        logger.info("click on the element: " + elementToClick);
+        waitForCondition(() -> {
+            try {
+                if ((boolean) evaluateJavascript(isElementDisplayed)) {
+                    evaluateJavascript(elementToClick);
+                    return true;
+                }
+            } catch (NoSuchWindowException exception) {
+                return true;
+            } catch (Exception ex) {
+                return (ex.toString().contains("Cannot read properties of undefined (reading 'scrollIntoView')"));
+            }
+            return false;
+        }, 45, "Failed to click on the element: " + elementToClick);
+        waitForPageLoading();
+    }
+
+    /**
+     * Performs click using JavaScript
+     *
+     * @param element Element to click
+     */
+    public void jsClick(WebElement element) {
+        waitForPageLoading();
+        logger.debug("perform javascript click using element: " + element.toString());
+        waitForCondition(ExpectedConditions.elementToBeClickable(element));
+        waitForCondition(() -> {
+            try {
+                evaluateJavascript("arguments[0].scrollIntoView();arguments[0].focus();arguments[0].click()", element);
+            } catch (StaleElementReferenceException s) {
+                return false;
+            }
+            return true;
+        }, "Failed to click on element:" + element);
+        waitForPageLoading();
+    }
+
+
+    public void jsClick(By by) {
+        waitForPageLoading();
+        logger.debug("Perform java script  click using By: " + by.toString());
+        waitForCondition(ExpectedConditions.elementToBeClickable(by));
+        waitForCondition(() -> {
+            try {
+                evaluateJavascript("arguments[0].scrollIntoView();arguments[0].focus();arguments[0].click()", findElement(by));
+            } catch (StaleElementReferenceException s) {
+                return false;
+            }
+            return true;
+        }, "Failed to click on element:" + by);
+        waitForPageLoading();
+    }
+
+    /**
+     * Performs click using action class from selenium
+     *
+     * @param element element to click on
+     */
+    public void performActionClick(WebElement element) {
+        waitForPageLoading();
+        logger.debug("Perform click  using actions class on element: " + element.toString());
+        waitForCondition(ExpectedConditions.elementToBeClickable(element));
+        scrollElementIntoView(element);
+        waitForCondition(() -> {
+            new Actions(getDriver())
+                    .moveToElement(element)
+                    .click().build().perform();
+            return true;
+        }, "Fail to perform click on :" + element);
+
+    }
+
+    /**
+     * Performs click using Actions class from selenium
+     *
+     * @param by Identify element using BY class
+     */
+    public void performActionClick(By by) {
+        logger.debug("Perform click  using actions class on element: " + by.toString());
+        scrollElementIntoView(by);
+        waitForCondition(() -> {
+            WebElement element = (WebElement) waitForCondition(ExpectedConditions.elementToBeClickable(by));
+            new Actions(getDriver())
+                    .moveToElement(element)
+                    .click().build().perform();
+            return true;
+        }, "Fail to perform click on :" + by);
+        waitForPageLoading();
+
+    }
+
+    /**
+     * Clicks on the element using By, it handles different exceptions
+     *
+     * @param by Identify element using BY
+     */
+    public void click(By by) {
+        logger.debug("click on element using By:" + by);
+        waitForPageLoading();
+        waitForCondition(ExpectedConditions.elementToBeClickable(by));
+        waitForCondition(() -> {
+            try {
+                findElement(by).click();
+            } catch (ElementClickInterceptedException e) {
+                logger.warn("Retry with java script click");
+                jsClick(by);
+            } catch (ElementNotInteractableException e) {
+                logger.warn("Retry with action class click");
+                performActionClick(by);
+            } catch (StaleElementReferenceException s) {
+                logger.warn("thrown stale element exception retry in progress");
+                click(by);
+            } catch (Exception e) {
+                return false;
+            }
+            return true;
+        }, "Fail to perform click on :" + by);
+
+        waitForPageLoading();
+
+    }
+
+    public void clickOnLinkText(String linkText) {
+        logger.debug("click on element using link text:" + linkText);
+        click(By.partialLinkText(linkText));
+    }
+
+    public WebElement getElement(By by) {
+        logger.debug("wait for the element to be visible and return using By:" + by);
+        return (WebElement) waitForCondition(ExpectedConditions.visibilityOfElementLocated(by));
+    }
+
+    public WebElement findElement(By by) {
+        logger.debug("get the element without checking for the visibility By:" + by);
+        return getDriver().findElement(by);
+    }
+
+    public List<WebElement> findElements(By by) {
+        logger.debug("get the matching elements,without waiting for the visibility using By:" + by);
+        return getDriver().findElements(by);
+    }
+
+    /**
+     * Gets the element using the css selector
+     * it will wait till the element is visible
+     *
+     * @param query pass the css selector as string
+     * @return webElement
+     */
+    public WebElement getElement(String query) {
+        logger.debug("Get element using jquery:" + query);
+        String findElementQuery = String.format("return $('%s:visible')[0];", query);
+        String isElementDisplayed = String.format("return $('%s:visible').length>0;", query);
+        waitForPageLoading();
+        waitForCondition(() -> (boolean) evaluateJavascript(isElementDisplayed), "Failed to get the element, using:" + findElementQuery);
+        return (WebElement) evaluateJavascript(findElementQuery);
+    }
+
+    /**
+     * Gets the element using the css selector
+     * it will wait till the element is visible
+     *
+     * @param querySelector pass the css selector as string
+     * @return webElement
+     */
+    public List<WebElement> getElements(String querySelector) {
+        String query = format("return jQuery.find('%s')", querySelector);
+        logger.debug("Get elements using jquery:" + query);
+        String isElementDisplayed = String.format("return $('%s:visible').length>0;", querySelector);
+        waitForPageLoading();
+        waitForCondition(() -> (boolean) evaluateJavascript(isElementDisplayed), "Failed to get the element, using:" + query);
+        return (List<WebElement>) evaluateJavascript(query);
+    }
+
+
+    /**
+     * Gets the list of the web element using By
+     * it will wait for at least it contains one element,
+     * if no elements are displayed in the given time it will throw exception
+     *
+     * @param by pass the element identifier using by
+     * @return list of WebElements
+     */
+    public List<WebElement> getElements(By by) {
+        logger.debug("wait for the visibility of the elements and return using by:" + by);
+        waitForCondition(ExpectedConditions.visibilityOfElementLocated(by));
+        return getDriver().findElements(by);
+    }
+
+    /**
+     * clicks on the passed element, it will try with the selenium click in first attempt.
+     * if it fails then it will try the other options like jquery and mouse click
+     *
+     * @param element element to click on
+     */
+    public void click(WebElement element) {
+        scrollElementIntoView(element);
+        logger.debug("Perform click on: " + element.toString());
+        waitForCondition(ExpectedConditions.elementToBeClickable(element));
+        waitForCondition(() -> {
+            try {
+                element.click();
+            } catch (ElementClickInterceptedException e) {
+                jsClick(element);
+            } catch (ElementNotInteractableException e) {
+                performActionClick(element);
+            } catch (Exception e) {
+                return false;
+            }
+            return true;
+        }, "Fail to perform click on :" + element);
+        waitForPageLoading();
+    }
+
+    /**
+     * Enter text into the element , using BY class
+     * Waits for the element to be visible and then sends the text to the element
+     *
+     * @param by   pass the BY value
+     * @param text text to enter into the text box
+     */
+    public void enterText(By by, String text) {
+        logger.info("Enter value into the textbox:" + by + "value:" + text);
+        waitForCondition(() -> {
+            WebElement element = findElement(by);
+            click(element);
+            element.clear();
+            element.sendKeys(getNonEmptyValue(text));
+            return true;
+        }, "Failed to enter the text into the text field" + by + "value:" + text);
+
+    }
+
+    /**
+     * Enter the text into the element using jQuery
+     * waits for the element to be available and sends the text
+     *
+     * @param Jquery pass the jQuery to identify the element
+     * @param value  value to enter into the text box
+     */
+    public void enterText(String Jquery, String value) {
+        logger.debug("Enter value into the textbox using jquery:" + Jquery + "value:" + value);
+        waitForPageLoading();
+        String script = String.format("%s.first().val(\"%s\")", Jquery, value);
+        logger.info("Enter text using :" + script);
+        String waitForElement = String.format(" return %s.length>0", Jquery);
+        waitForCondition(() -> (boolean) evaluateJavascript(waitForElement), "Element not visible in the given time" + waitForElement);
+        evaluateJavascript(script);
+    }
+
+    /**
+     * Enter text into the TextBox using the WebElement
+     *
+     * @param element Text box element
+     * @param text    Text to enter into the text box
+     */
+    public void enterText(WebElement element, String text) {
+        logger.debug("Enter value into the textbox:" + element + "value:" + text);
+        click(element);
+        waitForCondition(() -> {
+            element.clear();
+            element.sendKeys(getNonEmptyValue(text));
+            return true;
+        }, "Failed to enter the text into the text field" + element + "value:" + text);
+
+    }
+
+//Login with different users	
+//1.Given I login to spm as <users> , 2.And I am on the Home page of the IBM SPM
+   // Related to 'i_login_to_spm'& 'i_am_on_the_home_page_of_the_ibm_spm' method
+    public void waitForPageLoading() {
+        try {
+            waitForCondition(() -> (Boolean) evaluateJavascript("return document.readyState=='complete'"),
+                    "Page not loaded in the given time, page title:" + getDriver().getTitle());
+        } catch (Exception e) {
+            logger.warn("Page not loaded in the given time");
+        }
+    }
+
+    /**
+     * waits for the specified condition to be met
+     *
+     * @param action           pass the expected condition, this should return a boolean value
+     * @param timeout          pass the timeout in seconds
+     * @param messageOnFailure Message to be displayed on failure
+     */
+    public void waitForCondition(Supplier<Boolean> action, Integer timeout, String messageOnFailure) {
+        String[] stackTrace = new String[1];
+        try {
+            new WebDriverWait(getDriver(), Duration.ofSeconds(timeout), Duration.ofMillis(3000)).withMessage(messageOnFailure + " StackTrace:" + stackTrace[0])
+                    .ignoring(Exception.class)
+                    .until((d) -> {
+                        try {
+                            return action.get();
+                        } catch (StaleElementReferenceException s) {
+                            if (s.getMessage() != null) stackTrace[0] = s.getMessage();
+                            return false;
+                        } catch (JSONException e) {
+                            return false;
+                        } catch (Exception e) {
+                            if (e.getMessage() != null) stackTrace[0] = e.getMessage();
+                            return false;
+                        }
+                    });
+        } catch (Exception e) {
+            String strace = stackTrace[0] == null ? "" : stackTrace[0];
+            if (!strace.contains("characters read:")) {
+                Serenity.takeScreenshot();
+                Assert.fail("Message:" + messageOnFailure + "\n" + strace);
+            }
+        }
+    }
+
+    /**
+     * waits for the expected condition to be met, default timeout is 30 seconds
+     *
+     * @param expectedConditions expected condition , supports all the selenium expected conditional options
+     * @return object it can be of web element / list of web elements
+     */
+    public Object waitForCondition(ExpectedCondition expectedConditions) {
+        try {
+            return new WebDriverWait(getDriver(), Duration.ofSeconds(30)).withMessage("Given condition not met , ExceptedCondition:" + expectedConditions.toString())
+                    .ignoring(Exception.class)
+                    .until(expectedConditions);
+        } catch (Exception e) {
+            String strace = e.getMessage() == null ? "" : e.getMessage();
+            if (!strace.contains("characters read:")) {
+                Serenity.takeScreenshot();
+                Assert.fail("Message:" + "\n" + strace);
+            }
+        }
+        return new Object();
+    }
+
+    /**
+     * Waits for the specific condition to be met.
+     * Default timeout is 30 seconds
+     * @param action           pass the expected condition , it should return a boolean value
+     * @param messageOnFailure Message to be displayed on failure of this condition
+     */
+    public void waitForCondition(Supplier<Boolean> action, String messageOnFailure) {
+        waitForCondition(action, 120, messageOnFailure);
+    }
+
+    /**
+     * Waits for the specified condition to be met, it won't through any exception on condition fail
+     * Exception is muted , it continues after the timeout without exception
+     *
+     * @param action           condition to met, it should return boolean
+     * @param timeoutInSeconds          retry for specified seconds
+     * @param messageOnFailure Message to be displayed on condition fail
+     */
+    public void waitForConditionWithoutException(Supplier<Boolean> action, Integer timeoutInSeconds, String messageOnFailure) {
+        try {
+            new WebDriverWait(getDriver(), Duration.ofSeconds(timeoutInSeconds), Duration.ofMillis(3000)).withMessage(messageOnFailure + " StackTrace:")
+                    .ignoring(Exception.class)
+                    .until((d) -> action.get());
+        } catch (Exception e) {
+            logger.warn("caught with exception, exception muted:" + e.getMessage());
+        }
+    }
+
+    /**
+     * Checks for the existence of the element on the page, if the element exist it returns true
+     *
+     * @param cssSelector identifies the element using the css selector
+     * @return if the element exists it returns true else false
+     */
+    public boolean containsElements(String cssSelector) {
+        waitForPageLoading();
+        logger.debug("Checking contains element on the page, element: " + cssSelector);
+        String querySelector = cssSelector.startsWith("$") ? cssSelector : format("$(\"%s\")", cssSelector);
+        String queryToCheckStatus = String.format("return %1$s.is(':visible');", querySelector);
+        boolean status = (boolean) executeJavascript(queryToCheckStatus);
+        logger.debug("Is any elements appearing on the page with the Css selector: " + querySelector + " : " + status);
+        return status;
+    }
+
+    /**
+     * Executes the provided JavaScript code using the underlying JavaScript execution engine.
+     * The method attempts to execute the code up to 5 times, in case of exceptions, before giving up.
+     *
+     * @param script The JavaScript code to be executed.
+     * @return The result of the JavaScript execution, which can be of any Object type.
+     */
+    public Object executeJavascript(final String script) {
+        for (int i = 0; i < 5; i++) {
+            try {
+                return evaluateJavascript(script);
+            } catch (Exception e) {
+                logger.warn("JavaScript execution failed: " + e.getMessage());
+            }
+        }
+        return evaluateJavascript(script);
+    }
+
+
+    /**
+     * gets the text of all the elements ,if no elements present, it will throw exception
+     *
+     * @param cssSelector identifies the element using the css selector
+     * @return returns the text of the matched elements
+     */
+    public List<String> getTextOfAllElements(String cssSelector) {
+        String formattedSelector = cssEscape(cssSelector);
+        logger.debug("Get the text of all the matching elements using cssSelector:" + cssSelector);
+        waitForCondition(() -> containsElements(formattedSelector), "No elements exist");
+        String scriptToGetALlElements = String.format("var elements =jQuery.find(\"%s\");var r=[];elements.forEach(e=>r.push(e.textContent.trim()));return r;", formattedSelector);
+        return (List<String>) evaluateJavascript(scriptToGetALlElements);
+    }
+
+    /**
+     * applies the bulk validation
+     * @param resultsToValidate
+     * @param validationName
+     * @throws Exception
+     */
+    public void applyValidation(Map<String, String> resultsToValidate, String validationName) throws Exception {
+        AssertionHelper assertionHelper = new AssertionHelper(validationName);
+        for (Map.Entry<String, String> itemToValidate : resultsToValidate.entrySet()) {
+            assertionHelper.assertContains(itemToValidate.getKey(), itemToValidate.getKey(), itemToValidate.getValue());
+        }
+        assertionHelper.displayResultsWithExceptions();
+    }
+
+    /**
+     * Gets the attribute of the element using By class
+     *
+     * @param by        how to identify the element
+     * @param attribute attribute value
+     * @return returns the attribute value
+     */
+    public String getAttribute(By by, String attribute) {
+        logger.debug("Get the attribute of the element:" + by + " attribute:" + attribute);
+        AtomicReference<String> attributeValue = new AtomicReference<>("");
+        waitForCondition(() -> {
+            attributeValue.set(findElement(by).getAttribute(attribute));
+            return true;
+        }, "Failed to get the attribute value using By:" + by + " attribute:" + attribute);
+        return attributeValue.get();
+    }
+
+    /**
+     * Gets the attribute of the element using Webelement
+     *
+     * @param element   WebElement
+     * @param attribute Attribute of the element
+     * @return returns the attribute value
+     */
+    public String getAttribute(WebElement element, String attribute) {
+        logger.debug("Get the attribute of the element:" + element + " attribute:" + attribute);
+        waitForCondition(ExpectedConditions.visibilityOf(element));
+        return element.getAttribute(attribute);
+    }
+
+    /**
+     * Clicks on the element and waits for the specified element to be available
+     *
+     * @param elementToClick   element to click on
+     * @param elementToWaitFor expected element to be visible after the click
+     */
+    public void clickAndWaitForElement(By elementToClick, By elementToWaitFor) {
+        logger.debug("click on element:" + elementToClick + " and wait for element :" + elementToWaitFor);
+        waitForCondition(() -> {
+            pressEnterOnElement(elementToClick);
+            return !findElements(elementToWaitFor).isEmpty();
+        }, "element not displayed in the given time");
+    }
+
+    public void clickAndWaitForElement(String elementToClickCss, String elementToWaitForCss) {
+        logger.debug("click on element:" + elementToClickCss + " and wait for element :" + elementToWaitForCss);
+        waitForCondition(() -> {
+            getElement(elementToClickCss).sendKeys(Keys.ENTER);
+            return containsElements(elementToWaitForCss);
+        }, "element not displayed in the given time");
+    }
+
+
+    public void shouldContainText(String reason, By by, String textToValidate) {
+        String expectedText = getNonEmptyValue(textToValidate);
+        logger.debug("verify field " + by + " contains expected text:" + expectedText);
+        AtomicReference<String> actualText= new AtomicReference<>("");
+        waitForConditionWithoutException(() -> {
+            actualText.set(find(by).getTextContent());
+            return actualText.get().replace("\n", "").contains(expectedText);
+         //   return actualText.get().replaceAll("\\s+","").contains(expectedText);
+        }, 20, "");
+        assertThat(actualText.get().replaceAll("\\s+","")).describedAs(reason + " Actual: '%s', Expected: '%s'", actualText.get(), expectedText).contains(expectedText.replaceAll("\\s+",""));
+
+    }
+
+    public void shouldBeEqualToText(String reason, By by, String textToValidate) {
+        String expectedText = getNonEmptyValue(textToValidate);
+        logger.debug("verify field " + by + " shouldBeEqualTo expected text:" + expectedText);
+        waitForConditionWithoutException(() -> findElement(by).getText().contains(expectedText), 20, "");
+        String actualText = getText(by).replace("\n", "");
+        assertThat(actualText).describedAs(reason + " Actual: '%s', Expected: '%s'", actualText, expectedText).isEqualTo(expectedText);
+
+    }
+
+    /**
+     * Verifies that the text of the element located by the given 'By' object is equal to the expected text,
+     * ignoring the case.
+     *
+     * @param reason         A reason or description for the validation.
+     * @param by             The 'By' object representing the locator of the element to be validated.
+     * @param textToValidate The expected text that the element should contain (case-insensitive).
+     */
+    public void shouldBeEqualToIgnoringCase(String reason, By by, String textToValidate) {
+        String expectedText = getNonEmptyValue(textToValidate);
+        logger.debug("Verifying field {} should be equal to text (ignoring case): {}", by, expectedText);
+
+        waitForConditionWithoutException(() -> findElement(by).getText().toLowerCase().contains(expectedText.toLowerCase()), 20, "");
+        String actualText = getText(by).replace("\n", "");
+        assertThat(actualText).describedAs(reason + " Actual: '%s', Expected: '%s'", actualText, expectedText).isEqualToIgnoringCase(expectedText);
+    }
+
+    public void shouldContainsToIgnoringCase(String reason, By by, String textToValidate) {
+        String expectedText = getNonEmptyValue(textToValidate);
+        logger.debug("Verifying field {} should contain text (ignoring case): {}", by, expectedText);
+
+        waitForConditionWithoutException(() -> findElement(by).getText().toLowerCase().contains(expectedText.toLowerCase()), 20, "");
+        String actualText = getText(by).replace("\n", "");
+        assertThat(actualText).describedAs(reason + " Actual: '%s', Expected: '%s'", actualText, expectedText).containsIgnoringCase(expectedText);
+    }
+
+    /**
+     * verifies the value on the text
+     *
+     * @param reason         message to be displayed on failure
+     * @param by             element to check
+     * @param textToValidate expected text on the element
+     */
+    public void shouldContainValue(String reason, By by, String textToValidate) {
+        String expectedText = getNonEmptyValue(textToValidate);
+        logger.debug("verify field " + by + " shouldContainValue :" + expectedText);
+        waitForConditionWithoutException(() -> getAttribute(by, "value").contains(expectedText), 20, "");
+        String actualValue = getAttribute(by, "value");
+        assertThat(actualValue).describedAs(reason + " Actual: '%s', Expected: '%s'", actualValue, expectedText).contains(expectedText);
+    }
+
+    public void waitForSpecificTime(int time) throws InterruptedException {
+        Thread.sleep(time);
+    }
+    /**
+     * Returns the text from the specified page in the pdf file
+     * @param file pdf file
+     * @param pageIndex page index , page1 can be read with index 0
+     * @return
+     * @throws IOException
+     */
+    public String getTextFromPDFPage(File file, int pageIndex) throws IOException {
+        waitForCondition(file::exists, "File does not exists in the given path:" + file);
+        PDFTextStripper stripper = new PDFTextStripper();
+        PDDocument document = PDDocument.load(file);
+        stripper.setStartPage(pageIndex + 1);
+        stripper.setEndPage(pageIndex + 1);
+        String extractedText = stripper.getText(document);
+        document.close();
+        return extractedText;
+    }
+
+    /**
+     * checks the value is not null or not empty
+     *
+     * @param value value to check
+     * @return returns true if the value is not null or not empty
+     */
+    public boolean isNotNullOrEmpty(String value) {
+        return !isNullOrEmpty(value);
+    }
+
+    /**
+     * checks the value is null or empty
+     *
+     * @param value value to check
+     * @return return true if the value is null or empty
+     */
+    public boolean isNullOrEmpty(String value) {
+        return value == null || value.isEmpty();
+    }
+
+    /**
+     * Returns a formatted string  using the formatted string and arguments
+     *
+     * @param stringToFormat string to be formatted
+     * @param args           arguments to pass to the format
+     * @return formatted string
+     */
+    public String format(String stringToFormat, Object... args) {
+        return String.format(stringToFormat, args);
+    }
+
+    /**
+     * scrolls to the bottom of the page, Note only works on the jquery supported pages only
+     */
+    public void scrollToPageBottom() {
+        waitForConditionWithoutException(() -> {
+            evaluateJavascript("$(function(){$('html, body').scrollTop($(document).height());})");
+            return true;
+        }, 8, "failed to scroll into the bottom of the page");
+    }
+
+    /**
+     * scrolls to the Top of the page, Note only works on the jquery supported pages only
+     */
+    public void scrollToPageTop() {
+        waitForConditionWithoutException(() -> {
+            evaluateJavascript("window.scrollTo(0, 0);");
+            return true;
+        }, 8, "failed to scroll into the bottom of the page");
+    }
+
+    public String cssEscape(String using) {
+        return using.replaceAll("(['\"\\\\#.:;,!?+<>=~*^$|%&@`{}\\-\\/\\[\\]\\(\\)])", "\\\\$1");
+    }
+
+    /**
+     * Returns the specified value if it is not null or empty, or an empty string otherwise.
+     *
+     * @param value the value to check
+     * @return the non-empty value, or an empty string if the value is null or empty
+     */
+    public String getNonEmptyValue(String value) {
+        return isNullOrEmpty(value) ? "" : value;
+    }
+    /**
+     * Purpose: This Common method is to read data form Yaml file for eligibility amount across all benefits
+     * Types include:
+     *
+     * @return
+     */
+
+    public String yamlFileReader(String eligibleAmount) {
+        String amount;
+        try {
+            FileInputStream input = new FileInputStream("src/test/resources/testdata/Uprating/upratingData.yaml");
+            Map<String, Object> obj = yaml.load(input);
+            amount = (String) obj.get(eligibleAmount);
+            logger.info(amount);
+        } catch (FileNotFoundException ex) {
+            throw new RuntimeException(ex);
+        }
+        return amount;
+    }
+
+    /**
+     * Formats a date based on the provided time components.
+     *
+     * @param time A string containing time components such as years, months, weeks, and days.
+     *             For example, "2 years 3 months 4 weeks 5 days".
+     * @return A formatted date string in the "yyyy-MM-dd" format based on the provided time components.
+     * @throws IllegalArgumentException If the input string is not in the expected format or if
+     *                                  any component's value is negative.
+     */
+    public String getDate(String time, String format) {
+        int days = 0;
+        int years = 0;
+        int months = 0;
+        int weeks = 0;
+
+        String[] parts = time.split("\\s+");
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i].toLowerCase();
+            if (part.contains("day")) {
+                days = Integer.parseInt(parts[i - 1]);
+            } else if (part.contains("month")) {
+                months = Integer.parseInt(parts[i - 1]);
+            } else if (part.contains("year")) {
+                years = Integer.parseInt(parts[i - 1]);
+            } else if (part.contains("week")) {
+                weeks = Integer.parseInt(parts[i - 1]);
+            }
+        }
+
+        DateTimeFormatter genericFormatter = DateTimeFormatter.ofPattern(format);
+        LocalDate resultDate = LocalDate.now().plusDays(days).plusMonths(months).plusYears(years).plusWeeks(weeks);
+        return resultDate.format(genericFormatter);
+    }
+    /**
+     * Checks an array is in descending order
+     *
+     * @param array arr to check values are in descending order
+     * @return returns true or false depending on if the values are in descending order
+     */
+    public <T extends Comparable<T>> boolean isSortedDescending(T[] array) {
+        for (int i = 1; i < array.length; i++) {
+            if (array[i].compareTo(array[i - 1]) > 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+

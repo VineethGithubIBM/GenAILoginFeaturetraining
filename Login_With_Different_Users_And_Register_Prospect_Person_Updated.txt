@@ -1,0 +1,12 @@
+@InSprintSmoke @InSprintSmokeSPM
+Feature: Login with different users & register and add bank evidence for Prospect person.
+
+  Scenario Outline: Login with different users.
+    Given I login to spm as "<users>"
+    And I am on the Home page of the IBM SPM
+
+    Examples:
+      | users    |
+      | admin    |
+      | sysadmin |
+
